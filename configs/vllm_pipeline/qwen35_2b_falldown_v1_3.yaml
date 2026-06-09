@@ -61,6 +61,7 @@ evaluate:
   enable_thinking: false
 
   benchmarks:
+    - "PIA_Falldown"
     - "ABB_Falldown"
     - "Coupang_Falldown"
     - "DTRO_Falldown"
@@ -70,7 +71,6 @@ evaluate:
     - "KhonKaen_Falldown"
     - "KISA_Falldown"
     - "Kumho_Falldown"
-    - "PIA_Falldown"
     - "Soil_Falldown"
     - "UGO_Falldown"
     - "Yonsei_Falldown"

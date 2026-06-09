@@ -239,3 +239,13 @@ test.mp4
 pytest.ini
 lmdeploy/*
 cosmos-reason2/*
+
+
+
+00_preprocessing/*
+01_train/*
+02_ablations/*
+
+# Local experiment scratch space (large, not for VCS)
+laboratory/
+unsloth_compiled_cache/

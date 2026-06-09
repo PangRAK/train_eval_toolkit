@@ -1,0 +1,119 @@
+# ============================================================
+# LMDeploy 벤치마크 평가 파이프라인 설정 - Falldown
+#
+# (테스트셋 평가 Precision/Recall/F1 과는 별개 프로세스)
+#
+# 사용법:
+#   python -m src.lmdeploy_pipeline -c configs/lmdeploy_pipeline/PIA_AI2team_VQA_falldown.yaml
+#
+# 모델 교체 시 변경 필드:
+#   docker.model_path, docker.hf_repo_id, evaluate.run_name, submit.model_name
+# ============================================================
+
+pipeline:
+  name: "PIA_AI2team_VQA_falldown_v0.4 Benchmark (LMDeploy)"
+  steps:
+    docker: true
+    evaluate: true
+    submit: true
+  cleanup_docker: true
+
+retry:
+  max_attempts: 3
+  wait_seconds: 30
+
+# -- Docker 설정 --
+docker:
+  container_name: "pia_ai2team_vqa_falldown_v0_4_lmdeploy"
+  image: "openmmlab/lmdeploy:latest-cu12"
+  model_path: "ckpts/PIA_AI2team_VQA_falldown_v0.4"
+  hf_repo_id: "PIA-SPACE-LAB/PIA_AI2team_VQA_falldown_v0.4"  # model_path에 모델이 없으면 HF에서 자동 다운로드
+  container_model_path: "/model"
+  gpus: "all"
+  port: 23333
+  ipc: "host"
+  volumes: []
+  lmdeploy_args:
+    tp: 1
+    session-len: 8192
+    backend: "pytorch"
+    cache-max-entry-count: 0.4     # KV cache GPU 메모리 비율 (0.0~1.0)
+    vision-max-batch-size: 1       # 비전 모델 이미지 동시 처리 수 (기본값: 1)
+    max-concurrent-requests: 256   # 서버 최대 동시 요청 수 (기본값: 256)
+  startup:
+    timeout_seconds: 300
+    poll_interval_seconds: 5
+    stream_logs: true
+
+# -- 평가 설정 --
+evaluate:
+  model: "/model"
+  run_name: "PIA_AI2team_VQA_falldown_v0.4"
+  api_base: "http://127.0.0.1:23333/v1"
+  bench_base_path: "/mnt/PoC_benchmark/huggingface_benchmarks_dataset/Leaderboard_bench" # api 서버의 주소임. 수정필요 X
+  output_path: "results/lmdeploy_eval"
+  overwrite_results: false
+
+  benchmarks:
+    - "ABB_Falldown"
+    - "Coupang_Falldown"
+    - "DTRO_Falldown"
+    - "GangNam_Falldown"
+    - "Hyundai_Falldown"
+    - "Innodep_Falldown"
+    - "KhonKaen_Falldown"
+    - "KISA_Falldown"
+    - "Kumho_Falldown"
+    - "PIA_Falldown"
+    - "Soil_Falldown"
+    - "UGO_Falldown"
+    - "Yonsei_Falldown"
+
+  # 프레임 샘플링
+  window_size: 30
+  interpolation: "forward"
+
+  # 추론 파라미터
+  concurrency: 100
+  jpeg_quality: 95
+  max_tokens: 15
+  temperature: 0.0
+  seed: 0
+  negative_label: "normal"
+
+  # 카테고리별 프롬프트
+  prompt_templates:
+    falldown: |
+      Analyze the image and determine whether the person's situation should be classified as `normal` or `falldown`.
+
+      Focus primarily on the person’s body posture, balance, support, and whether the pose appears controlled and intentional or collapsed and unintentional.
+
+      Use the following rules:
+      - Classify as `normal` if the person appears to be standing, walking, sitting, crouching, squatting, kneeling, bending, reclining, or lying down in a controlled, stable, supported, or clearly intentional manner.
+      - Classify as `falldown` only if the person appears collapsed, sprawled, limp, tumbled, or unintentionally down due to loss of body control.
+      - Do not mistake voluntary low postures or resting poses for a fall.
+
+      Return the result in JSON format:
+      {
+        "category": "normal or falldown",
+        "description": "..."
+      }
+
+      Description requirements:
+      - Start by stating whether one person or multiple people are visible.
+      - Describe the person’s posture and behavior before describing the environment.
+      - Explicitly mention whether the posture appears controlled/supported or collapsed/unintentional.
+      - Then describe the surrounding environment and spatial context.
+      - Keep the description objective and visually grounded.
+
+    default: "Is {category} visible in this image? Answer only with 0 (no) or 1 (yes)."
+
+# -- 제출 설정 --
+submit:
+  gradio_url: "http://172.168.47.39:7860/"
+  model_name: "PIA_AI2team_VQA_falldown_v0.4"
+  task_name: "🌠 VLM 🖥️"
+  datasets_used: "Finetuned"
+  config_file: "config.json"
+  results_base_dir: "results/lmdeploy_eval"
+  interval_seconds: 60

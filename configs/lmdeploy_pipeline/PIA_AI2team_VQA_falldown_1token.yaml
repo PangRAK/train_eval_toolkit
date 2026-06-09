@@ -1,0 +1,108 @@
+# ============================================================
+# LMDeploy 벤치마크 평가 파이프라인 설정 - Falldown
+#
+# (테스트셋 평가 Precision/Recall/F1 과는 별개 프로세스)
+#
+# 사용법:
+#   python -m src.lmdeploy_pipeline -c configs/lmdeploy_pipeline/PIA_AI2team_VQA_falldown.yaml
+#
+# 모델 교체 시 변경 필드:
+#   docker.model_path, docker.hf_repo_id, evaluate.run_name, submit.model_name
+# ============================================================
+
+_vars:
+  # yaml.safe_load 기준으로는 major/minor를 문자열 안에서 조합할 수 없어서
+  # 이 파일에서는 완성된 값을 앵커로 재사용한다.
+  pipeline_name: &pipeline_name "PIA_AI2team_VQA_falldown_v1.2 Benchmark (LMDeploy)"
+  model_name: &model_name "PIA_AI2team_VQA_falldown_v1.2"
+  container_name: &container_name "pia_ai2team_vqa_falldown_v1_2_lmdeploy"
+  model_path: &model_path "ckpts/PIA_AI2team_VQA_falldown_v1.2"
+  hf_repo_id: &hf_repo_id "PIA-SPACE-LAB/PIA_AI2team_VQA_falldown_v1.2"
+
+pipeline:
+  name: *pipeline_name
+  mode: "lmdeploy"
+  steps:
+    docker: true
+    evaluate: true
+    submit: true
+  cleanup_docker: true
+
+retry:
+  max_attempts: 3
+  wait_seconds: 30
+
+# -- Docker 설정 --
+docker:
+  container_name: *container_name
+  image: "openmmlab/lmdeploy:latest-cu12"
+  model_path: *model_path
+  hf_repo_id: *hf_repo_id  # model_path에 모델이 없으면 HF에서 자동 다운로드
+  container_model_path: "/model"
+  gpus: "all"
+  port: 23333
+  ipc: "host"
+  volumes: []
+  lmdeploy_args:
+    tp: 1
+    session-len: 8192
+    backend: "pytorch"
+    cache-max-entry-count: 0.4     # KV cache GPU 메모리 비율 (0.0~1.0)
+    vision-max-batch-size: 1       # 비전 모델 이미지 동시 처리 수 (기본값: 1)
+    max-concurrent-requests: 256   # 서버 최대 동시 요청 수 (기본값: 256)
+  startup:
+    timeout_seconds: 300
+    poll_interval_seconds: 5
+    stream_logs: true
+
+# -- 평가 설정 --
+evaluate:
+  model: "/model"
+  run_name: *model_name
+  api_base: "http://127.0.0.1:23333/v1"
+  bench_base_path: "/mnt/PoC_benchmark/huggingface_benchmarks_dataset/Leaderboard_bench" # api 서버의 주소임. 수정필요 X
+  output_path: "results/lmdeploy_eval"
+  overwrite_results: false
+  eval_mode: "cls"
+
+  benchmarks:
+    - "PIA_Falldown"
+    # - "ABB_Falldown"
+    # - "Hyundai_Falldown"
+    # - "Soil_Falldown"
+    # - "Coupang_Falldown"
+    # - "DTRO_Falldown"
+    # - "GangNam_Falldown"
+    # - "Innodep_Falldown"
+    # - "KhonKaen_Falldown"
+    # - "KISA_Falldown"
+    # - "Kumho_Falldown"
+    # - "UGO_Falldown"
+    # - "Yonsei_Falldown"
+
+  # 프레임 샘플링
+  window_size: 30
+  interpolation: "forward"
+
+  # 추론 파라미터
+  concurrency: 100
+  jpeg_quality: 95
+  max_tokens: 1
+  temperature: 0.0
+  seed: 0
+  negative_label: "normal"
+
+  # 카테고리별 프롬프트
+  prompt_templates:
+    falldown: " <CLS_FALLDOWN>"
+    default: " <CLS_FALLDOWN>"
+
+# -- 제출 설정 --
+submit:
+  gradio_url: "http://172.168.47.39:7860/"
+  model_name: *model_name
+  task_name: "🌠 VLM 🖥️"
+  datasets_used: "Finetuned"
+  config_file: "config.json"
+  results_base_dir: "results/lmdeploy_eval"
+  interval_seconds: 60
