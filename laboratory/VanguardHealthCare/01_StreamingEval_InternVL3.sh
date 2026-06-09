@@ -30,4 +30,8 @@ CUDA_VISIBLE_DEVICES=0 "${PYTHON}" "${SCRIPT_DIR}/01_StreamingEval_InternVL3.py"
     --buffer-size 12 \
     --interval 0.09 \
     --overlap-mode min \
-    --overlap-threshold 0.5
+    --overlap-threshold 0.5 \
+    --unlabeled-as-positive
+# --unlabeled-as-positive: this DATA_DIR (clips/violence) holds only target-event clips with
+# NO label JSONs, so every clip is graded as a ground-truth positive (correct detection = TP,
+# miss = FN). Drop this flag if you point DATA_DIR at a normally-labelled folder.

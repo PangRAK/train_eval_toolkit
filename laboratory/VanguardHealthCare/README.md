@@ -66,6 +66,21 @@ single `--event-type` passed on the command line. Videos with no events — or w
 of a *different* class — contribute only negatives, so a false firing on them counts as a
 false positive. Event-bearing videos are processed first (alphabetical within each group).
 
+<a id="unlabeled-folders"></a>
+
+### Unlabeled folders → `--unlabeled-as-positive`
+
+Some folders are curated to contain **only** the target event but ship **without** per-clip
+label JSONs — e.g. `.../clips/violence/` with bare `*.mp4`. By default such a clip has no
+events, so it's graded as a negative and a *correct* violence detection is wrongly scored as
+a **false positive**.
+
+Pass `--unlabeled-as-positive` to treat every video that has **no label JSON** as
+all-positive for `--event-type`: each clip becomes a ground-truth positive, so a correct
+detection counts as **TP** and a miss as **FN**. Videos that *do* have a label JSON are
+unaffected — still graded by overlap. This is the launcher's default for the `clips/violence`
+folder.
+
 ## Expected data format
 
 ```
@@ -129,6 +144,7 @@ python 01_StreamingEval_InternVL3.py \
 | `--overlap-mode` | `min` | `min` (overlap coeff.) · `clip` · `event` · `iou`. |
 | `--overlap-threshold` | `0.5` | Min overlap ratio for a clip to be a GT positive. |
 | `--unparsed-positive` | off | Treat unparseable answers as positive (default: negative). |
+| `--unlabeled-as-positive` | off | Grade videos that have **no label JSON** as all-positive for `--event-type` (correct detection → TP, miss → FN). For folders curated to hold only the target event. See [below](#unlabeled-folders). |
 | `--limit-videos`, `--max-clips-per-video` | `0` (all) | Debug caps. |
 | `--quiet` | off | Suppress per-clip logging. |
 

@@ -25,6 +25,15 @@ single ``--event-type`` passed on the command line. Videos with no events, or wi
 events of a *different* class, contribute only negatives for that run — so a model
 that fires on them counts as a false positive.
 
+Unlabeled folders (``--unlabeled-as-positive``)
+-----------------------------------------------
+When a data folder is curated to contain *only* the target event but ships **without**
+per-clip label JSONs (e.g. ``.../clips/violence/`` with bare ``*.mp4``), the default
+"no label -> all negatives" rule wrongly scores every correct detection as a false
+positive. Pass ``--unlabeled-as-positive`` to treat each video that has no label JSON as
+all-positive for ``--event-type`` (every clip is a GT positive: a correct detection is a
+TP, a miss is an FN). Videos that *do* have a label JSON are still graded by overlap.
+
 Model setting (fixed by the spec)
 ----------------------------------
 InternVL3-2B · NUM_SEGMENTS=12 · buffer_size=12 · interval=1s · max_num=1 (tiles/frame)
@@ -379,6 +388,12 @@ def process_video(streamer, video_path, json_path, spec, args, global_run=None):
 
     step = max(1, int(round(fps * args.interval)))  # frames between sampled frames
     events = load_target_events(json_path, spec["class_names"])
+    # A video with NO label JSON contributes no events, so by default every clip is a GT
+    # negative. With --unlabeled-as-positive we instead assume the whole (unlabeled) video IS
+    # the target event — the folder is curated to contain only it — and grade every clip as a
+    # GT positive. Videos that DO have a label JSON are graded by overlap as usual.
+    has_label = os.path.isfile(json_path)
+    force_positive = args.unlabeled_as_positive and not has_label
     pos_name = args.event_type
     n_sampled = (total_frames + step - 1) // step if total_frames > 0 else 0
     est_total_clips = n_sampled // args.buffer_size  # rough "i/~N" denominator
@@ -420,8 +435,13 @@ def process_video(streamer, video_path, json_path, spec, args, global_run=None):
         else:
             pred_label = pred
 
-        match_ratio, match_ev = best_overlap(window, events, args.overlap_mode)
-        gt_label = 1 if match_ratio >= args.overlap_threshold else 0
+        if force_positive:
+            # Unlabeled video assumed to be the target event -> clip is a GT positive.
+            gt_label = 1
+            match_ratio, match_ev = None, None
+        else:
+            match_ratio, match_ev = best_overlap(window, events, args.overlap_mode)
+            gt_label = 1 if match_ratio >= args.overlap_threshold else 0
 
         # confusion bucket + running tally
         if gt_label == 1 and pred_label == 1:
@@ -445,8 +465,9 @@ def process_video(streamer, video_path, json_path, spec, args, global_run=None):
                 "pred": pred_label,
                 "pred_raw": pred_raw,
                 "parse_failed": pred is None,
-                "overlap_ratio": round(match_ratio, 4),
+                "overlap_ratio": round(match_ratio, 4) if match_ratio is not None else None,
                 "matched_event": list(match_ev) if match_ev else None,
+                "gt_source": "unlabeled_assumed_positive" if force_positive else "label_overlap",
                 "outcome": outcome,
                 "inference_sec": round(timing["inference"], 4),
             }
@@ -458,7 +479,9 @@ def process_video(streamer, video_path, json_path, spec, args, global_run=None):
                 "unparsed" if pred is None else (pos_name if pred_label == 1 else "normal")
             )
             gt_name = pos_name if gt_label == 1 else "normal"
-            if match_ev is not None:
+            if force_positive:
+                gt_detail = f"  [no label JSON -> assumed {pos_name}-positive (--unlabeled-as-positive)]"
+            elif match_ev is not None:
                 gt_detail = (
                     f"  [best match: event frames {match_ev[0]}-{match_ev[1]}, "
                     f"ratio={match_ratio:.3f} ({args.overlap_mode}) thr={args.overlap_threshold}]"
@@ -517,6 +540,8 @@ def process_video(streamer, video_path, json_path, spec, args, global_run=None):
             "total_frames": total_frames,
             "sample_step_frames": step,
             "n_target_events": len(events),
+            "has_label": has_label,
+            "unlabeled_assumed_positive": force_positive,
             "parse_failures": parse_fail,
             "dropped_tail_frames": dropped,
             "avg_preprocess_sec": round(float(np.mean(pre_times)), 4) if pre_times else 0.0,
@@ -557,6 +582,12 @@ def main():
                         help="Min overlap ratio for a clip to count as a GT positive (default: 0.5)")
     parser.add_argument("--unparsed-positive", action="store_true",
                         help="Treat unparseable model answers as positive (default: negative)")
+    parser.add_argument("--unlabeled-as-positive", action="store_true",
+                        help="Treat videos that have NO label JSON as all-positive for --event-type: "
+                             "every clip is graded as a ground-truth positive (so a correct detection "
+                             "counts as TP, a miss as FN). Use for folders curated to contain only the "
+                             "target event, e.g. clips/violence/ with no frame-level labels. Videos that "
+                             "DO have a label JSON are unaffected (graded by overlap as usual).")
 
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--limit-videos", type=int, default=0, help="Process at most N videos (0 = all; for debugging)")
@@ -574,19 +605,26 @@ def main():
     if not pairs:
         raise SystemExit(f"No videos matched {args.video_glob} in {args.data_dir}")
 
-    # Process videos that contain the target event-type first. A video "has" the event-type when
-    # its label JSON holds >=1 interval of that class. Sort is stable on the secondary key, so
-    # ordering stays alphabetical within each group (event-bearing first, then the rest).
-    n_target = {v: len(load_target_events(j, spec["class_names"])) for v, j in pairs}
-    pairs.sort(key=lambda vj: (0 if n_target[vj[0]] > 0 else 1, vj[0]))
+    # Process GT-positive videos first. A video is target-positive when its label JSON holds
+    # >=1 interval of that class — OR, under --unlabeled-as-positive, when it has no label JSON
+    # at all. Sort is stable on the secondary key, so ordering stays alphabetical within each
+    # group (positive first, then the rest).
+    def _is_target_video(json_path: str) -> bool:
+        if not os.path.isfile(json_path):
+            return args.unlabeled_as_positive
+        return len(load_target_events(json_path, spec["class_names"])) > 0
+
+    is_target = {v: _is_target_video(j) for v, j in pairs}
+    pairs.sort(key=lambda vj: (0 if is_target[vj[0]] else 1, vj[0]))
     if args.limit_videos > 0:
         pairs = pairs[: args.limit_videos]
-    n_with = sum(1 for v, _ in pairs if n_target[v] > 0)
+    n_with = sum(1 for v, _ in pairs if is_target[v])
 
+    mode_note = " | unlabeled-as-positive=ON" if args.unlabeled_as_positive else ""
     print(f"[INFO] event-type={args.event_type} | videos={len(pairs)} "
-          f"({n_with} contain {args.event_type} events -> processed first) | "
+          f"({n_with} graded as {args.event_type}-positive -> processed first) | "
           f"interval={args.interval}s | buffer={args.buffer_size} | "
-          f"overlap={args.overlap_mode}>={args.overlap_threshold}")
+          f"overlap={args.overlap_mode}>={args.overlap_threshold}{mode_note}")
 
     streamer = InternVL3Streamer(args.model_path, device=args.device)
 
@@ -656,6 +694,7 @@ def main():
             "overlap_mode": args.overlap_mode,
             "overlap_threshold": args.overlap_threshold,
             "unparsed_positive": args.unparsed_positive,
+            "unlabeled_as_positive": args.unlabeled_as_positive,
         },
         "final_metrics": final,
         "per_video_metrics": per_video,
