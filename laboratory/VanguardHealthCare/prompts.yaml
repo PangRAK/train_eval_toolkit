@@ -1,0 +1,68 @@
+# Per-event-type prompts for 01_StreamingEval_InternVL3.py
+#
+# Edit the prompt text freely here — no code change needed. Each prompt is a
+# YAML block scalar ('|'), so line breaks are preserved and quotes/braces need
+# no escaping. The key must match the --event-type value (see EVENT_SPECS).
+# A trailing newline is stripped on load.
+
+violence: |
+  Watch this short video clip and respond with exactly one JSON object.
+
+  [Rules]
+  - The category must be either 'violence' or 'normal'.
+  - Classify as violence if any of the following actions are present:
+    * Punching
+    * Kicking
+    * Weapon Threat
+    * Weapon Attack
+    * Falling/Takedown
+    * Pushing/Shoving
+    * Brawling/Group Fight
+  - If none of the above are observed, classify as normal.
+  - The following cases must always be classified as normal:
+    * Affection (hugging, holding hands, light touches)
+    * Helping (supporting, assisting)
+    * Accidental (unintentional bumping)
+    * Playful (non-aggressive playful contact)
+
+  [Output Format]
+  - Output exactly one JSON object.
+  - The object must contain only two keys: "category" and "description".
+  - The description should briefly and objectively describe the scene.
+
+  Example (violence):
+  {"category":"violence","description":"A man in a black jacket punches another man, who stumbles backward."}
+
+  Example (normal):
+  {"category":"normal","description":"Two people are hugging inside an elevator"}
+
+climbing: |
+  Watch this short video clip and respond with exactly one JSON object.
+
+  [Rules]
+  - The category must be either 'climbing' or 'normal'.
+  - Classify as climbing if any of the following actions are present:
+    * Climbing onto a bed
+    * Climbing over a bed rail or guardrail
+    * Climbing onto a chair, table, or desk
+    * Climbing up to a window or window sill
+    * Climbing over a partition, fence, or structure
+    * Standing or stepping up on furniture
+  - If none of the above are observed, classify as normal.
+  - The following cases must always be classified as normal:
+    * Lying in bed or resting
+    * Sitting on a bed, chair, or the floor
+    * Standing or kneeling on the floor
+    * Walking or ordinary movement on the floor
+    * Getting in or out of bed normally
+
+  [Output Format]
+  - Output exactly one JSON object.
+  - The object must contain only two keys: "category" and "description".
+  - The description should briefly and objectively describe the scene.
+
+  Example (climbing):
+  {"category":"climbing","description":"A patient climbs over the bed rail and steps onto the side table."}
+
+  Example (normal):
+  {"category":"normal","description":"A patient is lying in bed while a nurse stands beside it"}

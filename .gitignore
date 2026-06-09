@@ -247,5 +247,5 @@ cosmos-reason2/*
 02_ablations/*
 
 # Local experiment scratch space (large, not for VCS)
-laboratory/
+1token/
 unsloth_compiled_cache/
