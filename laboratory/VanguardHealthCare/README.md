@@ -16,6 +16,23 @@ bash laboratory/VanguardHealthCare/01_StreamingEval_InternVL3.sh climbing   # cl
 
 The script resolves its own location, so it runs the same from any working directory.
 
+<a id="sampling-window"></a>
+
+> ### ⚠️ Default sampling: `--interval 0.09` + `--buffer-size 12` (≈ 1-second clip)
+>
+> The launcher's defaults are **`--interval 0.09` and `--buffer-size 12`** — and this is
+> deliberate, **not** the script's generic spec defaults (`interval 1.0s`). The fine-tuned
+> checkpoint
+> [`InternVL3-2B_gangnam_rwf2000_gj_cctv_scvdALL_NOweapon_no_split`](#model-checkpoint)
+> was **trained on 12 frames sampled at a 0.09 s interval**, i.e. **one ≈ 1-second clip per
+> inference** (12 × 0.09 s ≈ 1.08 s).
+>
+> **Why ~1 second:** violence is a very short-lived event — it appears and is over within a
+> fraction of a second to a second. So the model is fed only ~1 second of footage per
+> prediction, matching how it was trained. **Keep `--interval` and `--buffer-size` in sync
+> with the model's training window**; changing them (e.g. to the 1.0 s spec default) feeds
+> the model a temporal context it was never trained on and degrades accuracy.
+
 ## Files
 
 | File | Purpose |
@@ -115,11 +132,15 @@ python 01_StreamingEval_InternVL3.py \
 | `--limit-videos`, `--max-clips-per-video` | `0` (all) | Debug caps. |
 | `--quiet` | off | Suppress per-clip logging. |
 
-> **Note:** `01_StreamingEval_InternVL3.sh` ships with a denser sampling override
-> (`--buffer-size 4 --interval 0.09`) and a fine-tuned checkpoint path. The script's own
-> defaults (`buffer-size 12`, `interval 1.0s`, `max_num=1`, `max_new_tokens=15`,
-> `bfloat16`, 448×448) follow the original 2ndPoC spec. The `<image>` prefix is built from
-> the actual buffered frame count, so any `buffer-size` is valid.
+> **Note — launcher vs. spec defaults:** `01_StreamingEval_InternVL3.sh` deliberately runs
+> at **`--interval 0.09 --buffer-size 12`** (one ≈ 1-second clip per inference) to match the
+> fine-tuned checkpoint's training window — see the
+> [callout above](#sampling-window).
+> The `--interval 1.0` shown in *Direct invocation* is the script's generic 2ndPoC spec
+> default; the launcher overrides it on purpose. Other fixed knobs (`max_num=1`,
+> `max_new_tokens=15`, `bfloat16`, 448×448) follow the spec. The `<image>` prefix is built
+> from the actual buffered frame count, so any `buffer-size` is technically valid — but use
+> 12 with this checkpoint.
 
 ## Model checkpoint
 
@@ -127,6 +148,11 @@ The launcher uses a fine-tuned checkpoint hosted on Hugging Face:
 
 > **PIA-SPACE-LAB/InternVL3-2B_gangnam_rwf2000_gj_cctv_scvdALL_NOweapon_no_split**
 > <https://huggingface.co/PIA-SPACE-LAB/InternVL3-2B_gangnam_rwf2000_gj_cctv_scvdALL_NOweapon_no_split/tree/main>
+
+**Training window:** this checkpoint was trained on **12 frames sampled every 0.09 s
+(≈ 1-second clips)**. Run it with `--interval 0.09 --buffer-size 12` (the launcher's
+defaults) so inference matches training — see the
+[sampling callout](#sampling-window).
 
 Download it into `ckpts/` at the repo root (the path the `.sh` expects):
 
