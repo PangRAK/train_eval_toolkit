@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # internvl conda env carries the matching transformers/decord/cv2 stack for InternVL3.
 PYTHON="/workspace/sangrak/anaconda3/envs/internvl/bin/python"
 
-DATA_DIR="/workspace/sangrak/01-NAS-sangrak/01_Dataset/01_뱅가드헬스케어/2ndPoC/clips/violence"
+DATA_DIR="" # << Your dataset dir here
 EVENT_TYPE="${1:-violence}"     # violence | climbing  (override: ./01_StreamingEval_InternVL3.sh climbing)
 
 CUDA_VISIBLE_DEVICES=0 "${PYTHON}" "${SCRIPT_DIR}/01_StreamingEval_InternVL3.py" \
