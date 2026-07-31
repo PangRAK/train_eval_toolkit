@@ -232,6 +232,8 @@ ckpts/*
 results/eval_result/*
 *.csv
 results/*
+# any results/ dir at any depth (e.g. laboratory/VanguardHealthCare/results/)
+**/results/
 1.png
 test.mp4
 .claude

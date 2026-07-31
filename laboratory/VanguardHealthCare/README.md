@@ -81,6 +81,29 @@ detection counts as **TP** and a miss as **FN**. Videos that *do* have a label J
 unaffected — still graded by overlap. This is the launcher's default for the `clips/violence`
 folder.
 
+<a id="image-inference"></a>
+
+## Image vs. video inference (`--buffer-size 1`)
+
+By default the harness runs **video inference**: each clip is `--buffer-size` sampled frames fed
+to the model together — one 448×448 tile per frame, addressed by a `Frame1: <image> …` prefix
+(`max_num=1`, no tiling — the InternVL3 video convention).
+
+Set **`--buffer-size 1`** to switch to **image inference**: every sampled frame is classified on
+its own via InternVL3's single-image path — the frame is split into up to `--image-max-num`
+dynamic tiles (default **12**) plus a thumbnail and addressed by a single `<image>`, exactly as
+the model card's `load_image` does (the script reuses the same `dynamic_preprocess` — no
+hand-rolled tiling). One inference per sampled frame; grading, metrics, and `--save-viz` work
+unchanged (each clip is a 1-frame window).
+
+```bash
+python 01_StreamingEval_InternVL3.py -d DIR -e climbing --buffer-size 1 --image-max-num 12
+```
+
+> **Note:** the fine-tuned checkpoint in [Model checkpoint](#model-checkpoint) was trained on
+> 12-frame **video** clips, so `--buffer-size 1` is meant for evaluating image-style checkpoints
+> or for ablations — not for that video checkpoint.
+
 ## Expected data format
 
 ```
@@ -139,12 +162,16 @@ python 01_StreamingEval_InternVL3.py \
 | `-d, --data-dir` | *(required)* | Folder of `*.mp4` + matching `*.json`. |
 | `-e, --event-type` | *(required)* | `violence` or `climbing` — detected **and** graded this run. |
 | `-m, --model-path` | `../../ckpts/InternVL3-2B` | InternVL3-2B local path or HF id. |
-| `--buffer-size` | `12` | Frames per clip / inference (= `NUM_SEGMENTS`). |
+| `--buffer-size` | `12` | Frames per clip / inference (= `NUM_SEGMENTS`). **Set to `1` for single-image inference** (dynamic tiling) instead of video — see [below](#image-inference). |
 | `--interval` | `1.0` | Sampling interval in seconds. |
+| `--image-max-num` | `12` | With `--buffer-size 1`, max dynamic tiles for the image (InternVL3 image default). Ignored for video. |
 | `--overlap-mode` | `min` | `min` (overlap coeff.) · `clip` · `event` · `iou`. |
 | `--overlap-threshold` | `0.5` | Min overlap ratio for a clip to be a GT positive. |
 | `--unparsed-positive` | off | Treat unparseable answers as positive (default: negative). |
 | `--unlabeled-as-positive` | off | Grade videos that have **no label JSON** as all-positive for `--event-type` (correct detection → TP, miss → FN). For folders curated to hold only the target event. See [below](#unlabeled-folders). |
+| `--save-viz` | off | Save an annotated `*.mp4` per video — the sampled frames with a red alert border + event label overlaid on every clip predicted positive. See [below](#alarm-visualization). |
+| `--viz-only-alarms` | off | With `--save-viz`, keep only the annotated videos that contain ≥ 1 alarm. |
+| `--viz-fps` | `0` (auto) | Playback fps of the annotated video (`0` = `1/interval`, i.e. real time). |
 | `--limit-videos`, `--max-clips-per-video` | `0` (all) | Debug caps. |
 | `--quiet` | off | Suppress per-clip logging. |
 
@@ -187,6 +214,21 @@ Written to `--out-dir` (default `./results/`), timestamped:
 - `{ts}_{event}_streaming_eval.json` — run config + per-video and final metrics.
 - `{ts}_{event}_clip_records.json` — every clip's window, prediction, raw model output,
   matched event, overlap ratio, and outcome (TP/FP/FN/TN).
+- `{ts}_{event}_viz/` — *(only with `--save-viz`)* one annotated `*.mp4` per video.
+
+<a id="alarm-visualization"></a>
+
+### Alarm visualization (`--save-viz`)
+
+Pass `--save-viz` to also render an annotated video per clip-folder video. The harness
+re-uses the sampled frames it already feeds the model and, for every clip the model flags
+as the target event, overlays a **red alert border + `[ALARM] <EVENT>`** banner (plus the
+model's short `description`) via `utils.utils.draw_alarm`; normal clips pass through
+untouched. Frames stream to an H.264 `*.mp4` (`utils.utils.VideoFromPIL`, needs **ffmpeg** on
+PATH) named `<video>_<event>.mp4` under `results/{ts}_{event}_viz/`. Playback runs at
+`1/interval` (real time) unless `--viz-fps` overrides it. Add `--viz-only-alarms` to keep
+only the videos where the model actually fired. The annotated frames are full-resolution
+source frames — independent of the 448×448 the model sees — so they stay easy to inspect.
 
 ## Requirements
 

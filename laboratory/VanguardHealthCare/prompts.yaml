@@ -41,20 +41,20 @@ climbing: |
 
   [Rules]
   - The category must be either 'climbing' or 'normal'.
-  - Classify as climbing if any of the following actions are present:
-    * Climbing onto a bed
-    * Climbing over a bed rail or guardrail
-    * Climbing onto a chair, table, or desk
-    * Climbing up to a window or window sill
-    * Climbing over a partition, fence, or structure
-    * Standing or stepping up on furniture
+  - Classify as climbing when a person climbs up onto and stands on a raised
+    surface, or climbs over a barrier. For example:
+    * Standing on a bed.
+    * Standing on a shelf, a chair, a table, or other furniture.
+    * Climbing up to a window or a window sill.
+    * Climbing over a partition wall, a fence, or a railing.
+    * Stepping or climbing up onto any other raised surface or structure.
   - If none of the above are observed, classify as normal.
   - The following cases must always be classified as normal:
-    * Lying in bed or resting
-    * Sitting on a bed, chair, or the floor
-    * Standing or kneeling on the floor
-    * Walking or ordinary movement on the floor
-    * Getting in or out of bed normally
+    * Standing, walking, or moving around on the floor.
+    * Sitting or lying on a bed, a chair, or the floor.
+    * Kneeling or leaning on a bed without standing up on it.
+    * Reaching for or touching something with only the hands or upper body.
+    * Getting in or out of bed normally.
 
   [Output Format]
   - Output exactly one JSON object.
@@ -62,7 +62,7 @@ climbing: |
   - The description should briefly and objectively describe the scene.
 
   Example (climbing):
-  {"category":"climbing","description":"A patient climbs over the bed rail and steps onto the side table."}
+  {"category":"climbing","description":"A patient stands on the bed and climbs over the partition wall."}
 
   Example (normal):
-  {"category":"normal","description":"A patient is lying in bed while a nurse stands beside it"}
+  {"category":"normal","description":"A patient kneels on the bed without standing up on it."}
